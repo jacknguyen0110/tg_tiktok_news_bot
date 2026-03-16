@@ -1,30 +1,67 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>GlobalNewsBot</title>
+  <meta charset="UTF-8" />
+  <title>GlobalNewsBot</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 80px;
+      background: #111;
+      color: white;
+    }
+    .btn {
+      padding: 14px 22px;
+      font-size: 18px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin: 10px;
+    }
+    .btn-login {
+      background: #25f4ee;
+      color: #000;
+    }
+    .btn-generate {
+      background: #fe2c55;
+      color: #fff;
+    }
+    .card {
+      width: 700px;
+      max-width: 90%;
+      margin: 0 auto;
+      padding: 30px;
+      background: #1a1a1a;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(0,0,0,.35);
+    }
+    a {
+      text-decoration: none;
+    }
+    .muted {
+      color: #bbb;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+  </style>
 </head>
+<body>
+  <div class="card">
+    <h1>{{ app_name }}</h1>
+    <p>AI generates hot news videos and prepares them for TikTok publishing.</p>
 
-<body style="font-family:Arial;text-align:center;margin-top:100px">
+    <a href="/login">
+      <button class="btn btn-login">Login with TikTok</button>
+    </a>
 
-<h1>GlobalNewsBot</h1>
+    <a href="/generate">
+      <button class="btn btn-generate">Generate Video</button>
+    </a>
 
-<p>AI generates news videos and posts to TikTok</p>
-
-<br>
-
-<a href="/login">
-<button style="padding:15px;font-size:18px">
-Login with TikTok
-</button>
-</a>
-
-<br><br>
-
-<a href="/generate">
-<button style="padding:15px;font-size:18px">
-Generate Video
-</button>
-</a>
-
+    <div class="muted">
+      App URL: {{ app_base_url }}
+    </div>
+  </div>
 </body>
 </html>
