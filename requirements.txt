@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-telegram-bot==20.7
+requests
+gspread
+google-auth
+python-dotenv
+moviepy
+pydub
+openai
+feedparser
+gTTS
