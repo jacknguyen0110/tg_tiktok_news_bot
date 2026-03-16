@@ -1,172 +1,173 @@
 import os
 import requests
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
+from urllib.parse import quote
 
-from app.news import get_hot_news
-from app.ai_writer import generate_script
-from app.tts import generate_voice
-from app.sheets_logger import log_content
+from fastapi import FastAPI
+from fastapi.responses import RedirectResponse, HTMLResponse
 
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-CHAT_ID = os.getenv("TELEGRAM_ALLOWED_CHAT_ID", "")
-CLIENT_KEY = os.getenv("TIKTOK_CLIENT_KEY", "")
+# ENV VARIABLES (set trên Railway)
+CLIENT_KEY = os.getenv("TIKTOK_CLIENT_KEY")
+CLIENT_SECRET = os.getenv("TIKTOK_CLIENT_SECRET")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
 
 
-def get_redirect_uri() -> str:
-    return f"{APP_BASE_URL}/callback"
+# -------------------------
+# HOME PAGE
+# -------------------------
+@app.get("/")
+def home():
+
+    html = """
+    <html>
+    <head>
+        <title>TikTok Integration Demo</title>
+        <style>
+            body{
+                font-family: Arial;
+                text-align:center;
+                margin-top:120px;
+            }
+            button{
+                padding:14px 28px;
+                font-size:18px;
+                background:#000;
+                color:white;
+                border:none;
+                border-radius:6px;
+                cursor:pointer;
+            }
+        </style>
+    </head>
+    <body>
+
+        <h1>TikTok Integration Demo</h1>
+
+        <p>This demo shows TikTok Login Kit integration.</p>
+
+        <br>
+
+        <a href="/login">
+            <button>Login with TikTok</button>
+        </a>
+
+    </body>
+    </html>
+    """
+
+    return HTMLResponse(html)
 
 
-def send_telegram_message(text: str) -> None:
-    if not TOKEN or not CHAT_ID:
-        return
-
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(
-        url,
-        json={
-            "chat_id": CHAT_ID,
-            "text": text,
-        },
-        timeout=30,
-    )
-
-
-def send_telegram_video(path: str, caption: str = "") -> None:
-    if not TOKEN or not CHAT_ID:
-        return
-
-    url = f"https://api.telegram.org/bot{TOKEN}/sendVideo"
-    with open(path, "rb") as f:
-        files = {"video": f}
-        data = {"chat_id": CHAT_ID}
-        if caption:
-            data["caption"] = caption
-        requests.post(url, data=data, files=files, timeout=120)
-
-
-@app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "app_name": "GlobalNewsBot",
-            "app_base_url": APP_BASE_URL,
-        },
-    )
-
-
-@app.get("/health")
-def health():
-    return {"status": "running"}
-
-
+# -------------------------
+# LOGIN REDIRECT
+# -------------------------
 @app.get("/login")
 def login():
-    if not CLIENT_KEY:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Missing TIKTOK_CLIENT_KEY"},
-        )
 
-    if not APP_BASE_URL:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Missing APP_BASE_URL"},
-        )
-
-    redirect_uri = get_redirect_uri()
+    redirect_uri = f"{APP_BASE_URL}/callback"
 
     auth_url = (
         "https://www.tiktok.com/v2/auth/authorize/"
         f"?client_key={CLIENT_KEY}"
         "&response_type=code"
-        "&scope=user.info.profile,video.publish"
-        f"&redirect_uri={redirect_uri}"
+        "&scope=user.info.basic"
+        f"&redirect_uri={quote(redirect_uri, safe='')}"
     )
 
     return RedirectResponse(auth_url)
 
 
-@app.get("/callback", response_class=HTMLResponse)
+# -------------------------
+# CALLBACK
+# -------------------------
+@app.get("/callback")
 def callback(code: str = "", error: str = ""):
+
     if error:
         return HTMLResponse(
             f"""
-            <html>
-              <body style="font-family:Arial;text-align:center;padding-top:80px">
-                <h2>TikTok login failed</h2>
-                <p>{error}</p>
-                <a href="/">Back</a>
-              </body>
-            </html>
+            <h2>Login failed</h2>
+            <p>Error: {error}</p>
+            <a href="/">Back</a>
             """,
-            status_code=400,
+            status_code=400
         )
 
-    return HTMLResponse(
-        f"""
-        <html>
-          <body style="font-family:Arial;text-align:center;padding-top:80px">
-            <h2>TikTok login success</h2>
-            <p>Authorization code received.</p>
-            <p style="word-break:break-all;max-width:900px;margin:0 auto">{code}</p>
-            <br>
-            <a href="/">Back to home</a>
-          </body>
-        </html>
-        """
-    )
+    redirect_uri = f"{APP_BASE_URL}/callback"
 
+    token_url = "https://open.tiktokapis.com/v2/oauth/token/"
 
-@app.get("/generate")
-def generate_demo():
-    return {
-        "message": "Demo generate completed",
-        "note": "This endpoint is for TikTok review demo flow.",
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
     }
 
+    data = {
+        "client_key": CLIENT_KEY,
+        "client_secret": CLIENT_SECRET,
+        "code": code,
+        "grant_type": "authorization_code",
+        "redirect_uri": redirect_uri,
+    }
 
-@app.post("/hotnews")
-async def hotnews():
-    """
-    Flow thật:
-    1. Lấy tin nóng
-    2. Viết script
-    3. Tạo audio
-    4. Render video
-    5. Gửi Telegram
-    6. Ghi Google Sheet
-    """
+    response = requests.post(
+        token_url,
+        headers=headers,
+        data=data,
+        timeout=30
+    )
 
-    try:
-        news = get_hot_news()
-        script = generate_script(news)
-        audio = generate_voice(script)
+    result = response.json()
 
-        # Lazy import để app vẫn boot được kể cả moviepy/ffmpeg có vấn đề
-        from app.video import render_video
+    if "access_token" not in result:
 
-        video = render_video(script, audio)
-
-        send_telegram_video(video, caption="Hot news video generated")
-        log_content(news, script)
-
-        return {
-            "status": "success",
-            "news_title": news.get("title", ""),
-            "script_preview": script[:200],
-        }
-
-    except Exception as e:
-        send_telegram_message(f"Hotnews error: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)},
+        return HTMLResponse(
+            f"""
+            <h2>Token exchange failed</h2>
+            <pre>{result}</pre>
+            <a href="/">Back</a>
+            """,
+            status_code=400
         )
+
+    access_token = result["access_token"]
+    open_id = result["open_id"]
+
+    html = f"""
+    <html>
+    <head>
+        <title>TikTok Login Success</title>
+        <style>
+            body{{
+                font-family: Arial;
+                text-align:center;
+                margin-top:120px;
+            }}
+            pre{{
+                background:#eee;
+                padding:10px;
+            }}
+        </style>
+    </head>
+
+    <body>
+
+        <h1>TikTok login success</h1>
+
+        <p>User authenticated successfully.</p>
+
+        <h3>Open ID</h3>
+        <pre>{open_id}</pre>
+
+        <h3>Access Token</h3>
+        <pre>{access_token[:40]}...</pre>
+
+        <br>
+
+        <a href="/">Back to home</a>
+
+    </body>
+    </html>
+    """
+
+    return HTMLResponse(html)
